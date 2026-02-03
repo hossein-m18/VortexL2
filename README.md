@@ -25,7 +25,7 @@ A modular, production-quality CLI tool for managing L2TPv3 tunnels and TCP port 
 ## 📦 Quick Install
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/iliya-Developer/VortexL2/main/install.sh | sudo bash
+bash <(curl -Ls https://raw.githubusercontent.com/iliya-Developer/VortexL2/main/install.sh)
 ```
 
 ## 🚀 First Run
@@ -75,7 +75,7 @@ sudo vortexl2
 #    - Enter ports: 443,80,2053
 ```
 
-### Outside Side Setup
+### kharej Side Setup
 
 ```bash
 # Open panel
@@ -94,8 +94,6 @@ sudo vortexl2
 | Command | Description |
 |---------|-------------|
 | `sudo vortexl2` | Open management panel |
-| `sudo vortexl2 apply` | Apply configuration (used by systemd) |
-| `sudo vortexl2 status` | Show tunnel status |
 | `sudo vortexl2 --version` | Show version |
 
 ## 🔍 Troubleshooting
@@ -156,7 +154,6 @@ Configuration is stored in `/etc/vortexl2/config.yaml`:
 
 ```yaml
 version: "1.0.0"
-user_id: "A1B2C3D4"
 role: "IRAN"
 ip_iran: "1.2.3.4"
 ip_kharej: "5.6.7.8"

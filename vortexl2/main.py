@@ -318,7 +318,6 @@ Commands:
 Examples:
   sudo vortexl2           # Open management panel
   sudo vortexl2 apply     # Apply config (for systemd)
-  sudo vortexl2 status    # Show current status
         """
     )
     parser.add_argument(
