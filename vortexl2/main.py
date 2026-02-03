@@ -66,21 +66,6 @@ def cmd_apply(config: Config):
     return 0
 
 
-def cmd_status(config: Config):
-    """Show tunnel status."""
-    tunnel = TunnelManager(config)
-    status = tunnel.get_status()
-    
-    print(f"Role: {status['role'] or 'Not set'}")
-    print(f"Configured: {'Yes' if status['configured'] else 'No'}")
-    print(f"Tunnel: {'Exists' if status['tunnel_exists'] else 'Not found'}")
-    print(f"Session: {'Exists' if status['session_exists'] else 'Not found'}")
-    print(f"Interface: {'Up' if status['interface_up'] else 'Down'}")
-    print(f"Interface IP: {status['interface_ip'] or 'None'}")
-    
-    return 0
-
-
 def handle_prerequisites(config: Config, tunnel: TunnelManager):
     """Handle prerequisites installation."""
     ui.show_banner(config)
@@ -276,6 +261,9 @@ def main_menu():
     # Set up signal handler for Ctrl+C
     signal.signal(signal.SIGINT, signal_handler)
     
+    # Clear screen before starting
+    ui.clear_screen()
+    
     config = Config()
     tunnel = TunnelManager(config)
     forward = ForwardManager(config)
@@ -336,7 +324,7 @@ Examples:
     parser.add_argument(
         'command',
         nargs='?',
-        choices=['apply', 'status'],
+        choices=['apply'],
         help='Command to run'
     )
     parser.add_argument(
@@ -351,9 +339,6 @@ Examples:
         check_root()
         config = Config()
         sys.exit(cmd_apply(config))
-    elif args.command == 'status':
-        config = Config()
-        sys.exit(cmd_status(config))
     else:
         main_menu()
 
