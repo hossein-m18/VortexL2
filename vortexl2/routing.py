@@ -315,3 +315,128 @@ def get_source_routing_status(ip: str, tunnel_name: str) -> Dict:
         status["working"] = working
     
     return status
+
+
+def setup_iptables_nat(local_ip: str, remote_ip: str, tunnel_name: str) -> Tuple[bool, str]:
+    """
+    Setup iptables NAT rules to handle L2TP traffic for secondary IPs.
+    
+    This is a workaround for the kernel limitation where L2TP raw sockets
+    don't properly bind to secondary IPs.
+    
+    Strategy:
+    - SNAT outgoing L2TP packets from main IP to secondary IP
+    - DNAT incoming L2TP packets from secondary IP to main IP
+    """
+    main_ip = get_main_ip()
+    if not main_ip:
+        return False, "Could not determine main IP"
+    
+    if local_ip == main_ip:
+        return True, "Main IP used, no NAT needed"
+    
+    steps = []
+    
+    # Create unique chain for this tunnel
+    chain_name = f"VORTEX_{tunnel_name.upper()[:8]}"
+    
+    # SNAT: Change source from main_ip to local_ip for outgoing L2TP to remote
+    # This makes the packet appear to come from secondary IP
+    snat_rule = (
+        f"iptables -t nat -A POSTROUTING "
+        f"-p 115 -s {main_ip} -d {remote_ip} "
+        f"-j SNAT --to-source {local_ip}"
+    )
+    
+    # First remove if exists
+    run_command(snat_rule.replace("-A", "-D") + " 2>/dev/null")
+    success, _, stderr = run_command(snat_rule)
+    if success:
+        steps.append(f"Added SNAT: {main_ip} -> {local_ip}")
+    else:
+        steps.append(f"SNAT failed: {stderr}")
+    
+    # DNAT: Change destination from local_ip to main_ip for incoming L2TP
+    # This routes packets destined for secondary IP to where kernel listens
+    dnat_rule = (
+        f"iptables -t nat -A PREROUTING "
+        f"-p 115 -d {local_ip} -s {remote_ip} "
+        f"-j DNAT --to-destination {main_ip}"
+    )
+    
+    # First remove if exists
+    run_command(dnat_rule.replace("-A", "-D") + " 2>/dev/null")
+    success, _, stderr = run_command(dnat_rule)
+    if success:
+        steps.append(f"Added DNAT: {local_ip} -> {main_ip}")
+    else:
+        steps.append(f"DNAT failed: {stderr}")
+    
+    return True, "\n".join(steps)
+
+
+def cleanup_iptables_nat(local_ip: str, remote_ip: str, tunnel_name: str) -> Tuple[bool, str]:
+    """
+    Remove iptables NAT rules for a tunnel.
+    """
+    main_ip = get_main_ip()
+    if not main_ip or local_ip == main_ip:
+        return True, "No NAT rules to cleanup"
+    
+    steps = []
+    
+    # Remove SNAT rule
+    snat_rule = (
+        f"iptables -t nat -D POSTROUTING "
+        f"-p 115 -s {main_ip} -d {remote_ip} "
+        f"-j SNAT --to-source {local_ip} 2>/dev/null"
+    )
+    run_command(snat_rule)
+    steps.append("Removed SNAT rule")
+    
+    # Remove DNAT rule
+    dnat_rule = (
+        f"iptables -t nat -D PREROUTING "
+        f"-p 115 -d {local_ip} -s {remote_ip} "
+        f"-j DNAT --to-destination {main_ip} 2>/dev/null"
+    )
+    run_command(dnat_rule)
+    steps.append("Removed DNAT rule")
+    
+    return True, "\n".join(steps)
+
+
+def setup_secondary_ip_tunnel(local_ip: str, remote_ip: str, tunnel_name: str) -> Tuple[bool, str]:
+    """
+    Complete setup for secondary IP tunnel:
+    1. Source routing (for proper source IP on outgoing)
+    2. IPTables NAT (for kernel binding workaround)
+    """
+    steps = []
+    
+    # Step 1: Source routing
+    success, msg = setup_source_routing(local_ip, tunnel_name)
+    steps.append(f"Source Routing: {msg}")
+    
+    # Step 2: IPTables NAT
+    success, msg = setup_iptables_nat(local_ip, remote_ip, tunnel_name)
+    steps.append(f"IPTables NAT: {msg}")
+    
+    return True, "\n".join(steps)
+
+
+def cleanup_secondary_ip_tunnel(local_ip: str, remote_ip: str, tunnel_name: str) -> Tuple[bool, str]:
+    """
+    Complete cleanup for secondary IP tunnel.
+    """
+    steps = []
+    
+    # Cleanup source routing
+    success, msg = cleanup_source_routing(local_ip, tunnel_name)
+    steps.append(f"Source Routing: {msg}")
+    
+    # Cleanup iptables
+    success, msg = cleanup_iptables_nat(local_ip, remote_ip, tunnel_name)
+    steps.append(f"IPTables NAT: {msg}")
+    
+    return True, "\n".join(steps)

@@ -18,7 +18,7 @@ from vortexl2 import __version__
 from vortexl2.config import TunnelConfig, ConfigManager, GlobalConfig
 from vortexl2.tunnel import TunnelManager
 from vortexl2.forward import get_forward_manager, get_forward_mode, set_forward_mode, ForwardManager
-from vortexl2.routing import setup_source_routing, cleanup_source_routing, is_secondary_ip
+from vortexl2.routing import setup_secondary_ip_tunnel, cleanup_secondary_ip_tunnel, is_secondary_ip
 from vortexl2 import ui
 
 
@@ -148,15 +148,18 @@ def handle_create_tunnel(manager: ConfigManager):
     ui.show_output(msg, "Tunnel Setup")
     
     if success:
-        # Setup source routing if using secondary IP
+        # Setup source routing + iptables NAT if using secondary IP
         if is_secondary_ip(config.local_ip):
-            ui.show_info("Setting up source routing for secondary IP...")
-            routing_success, routing_msg = setup_source_routing(config.local_ip, name)
+            ui.show_info("Setting up secondary IP routing...")
+            routing_success, routing_msg = setup_secondary_ip_tunnel(
+                config.local_ip, config.remote_ip, name
+            )
+            ui.show_output(routing_msg, "Secondary IP Setup")
             if routing_success:
-                ui.show_success("Source routing configured")
+                ui.show_success("Secondary IP routing configured")
                 config._config["has_source_routing"] = True
             else:
-                ui.show_warning(f"Source routing setup failed: {routing_msg}")
+                ui.show_warning("Secondary IP routing setup failed")
                 ui.show_warning("Tunnel may not work correctly with this IP")
         
         # Only save config after successful tunnel creation
@@ -205,14 +208,17 @@ def handle_delete_tunnel(manager: ConfigManager):
         success, msg = tunnel.full_teardown()
         ui.show_output(msg, "Tunnel Teardown")
         
-        # Cleanup source routing if configured
+        # Cleanup source routing + iptables if configured
         if config._config.get("has_source_routing") and config.local_ip:
-            ui.show_info("Cleaning up source routing...")
-            cleanup_success, cleanup_msg = cleanup_source_routing(config.local_ip, selected)
+            ui.show_info("Cleaning up secondary IP routing...")
+            cleanup_success, cleanup_msg = cleanup_secondary_ip_tunnel(
+                config.local_ip, config.remote_ip, selected
+            )
+            ui.show_output(cleanup_msg, "Secondary IP Cleanup")
             if cleanup_success:
-                ui.show_success("Source routing cleaned up")
+                ui.show_success("Secondary IP routing cleaned up")
             else:
-                ui.show_warning(f"Source routing cleanup: {cleanup_msg}")
+                ui.show_warning("Secondary IP cleanup issues")
     
     # Delete config
     manager.delete_tunnel(selected)
@@ -301,8 +307,8 @@ def handle_edit_tunnel(manager: ConfigManager):
     
     # Cleanup old routing if needed
     if old_has_routing and old_local_ip:
-        ui.show_info("Cleaning up old source routing...")
-        cleanup_source_routing(old_local_ip, selected)
+        ui.show_info("Cleaning up old secondary IP routing...")
+        cleanup_secondary_ip_tunnel(old_local_ip, config.remote_ip, selected)
     
     # Recreate tunnel with new IPs
     ui.show_info("Stopping tunnel...")
@@ -314,15 +320,18 @@ def handle_edit_tunnel(manager: ConfigManager):
     ui.show_output(msg, "Tunnel Restart")
     
     if success:
-        # Setup new source routing if using secondary IP
+        # Setup new source routing + iptables if using secondary IP
         if is_secondary_ip(config.local_ip):
-            ui.show_info("Setting up source routing for secondary IP...")
-            routing_success, routing_msg = setup_source_routing(config.local_ip, selected)
+            ui.show_info("Setting up secondary IP routing...")
+            routing_success, routing_msg = setup_secondary_ip_tunnel(
+                config.local_ip, config.remote_ip, selected
+            )
+            ui.show_output(routing_msg, "Secondary IP Setup")
             if routing_success:
-                ui.show_success("Source routing configured")
+                ui.show_success("Secondary IP routing configured")
                 config._config["has_source_routing"] = True
             else:
-                ui.show_warning(f"Source routing setup failed: {routing_msg}")
+                ui.show_warning("Secondary IP routing setup failed")
         else:
             config._config["has_source_routing"] = False
         
