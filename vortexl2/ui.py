@@ -23,6 +23,7 @@ except ImportError:
 
 from . import __version__
 from .config import TunnelConfig, ConfigManager
+from .routing import get_all_public_ips, is_secondary_ip, IPInfo
 
 
 console = Console()
@@ -94,6 +95,72 @@ def prompt_valid_ip(label: str, default: str = None, required: bool = True) -> O
             return ip
         console.print(f"[red]Invalid IP address: {ip}[/]")
         console.print("[dim]Format: X.X.X.X (each part 0-255)[/]")
+
+
+def prompt_select_local_ip(current_ip: str = None) -> Optional[str]:
+    """
+    Prompt user to select a local IP from available public IPs.
+    Shows all public IPs with indication of main vs secondary.
+    """
+    ips = get_all_public_ips()
+    
+    if not ips:
+        console.print("[yellow]Could not detect public IPs. Please enter manually.[/]")
+        return prompt_valid_ip("[bold green]Local Server Public IP[/]", required=True)
+    
+    console.print("\n[bold white]Available Public IPs:[/]")
+    
+    # Build table of IPs
+    table = Table(show_header=True, box=box.SIMPLE, padding=(0, 2))
+    table.add_column("#", style="bold cyan", width=3)
+    table.add_column("IP Address", style="green")
+    table.add_column("Interface", style="dim")
+    table.add_column("Type", style="white")
+    
+    for i, ip_info in enumerate(ips, 1):
+        ip_type = "[green]Main[/]" if ip_info.is_main else "[yellow]Secondary[/]"
+        current_marker = " [cyan](current)[/]" if ip_info.ip == current_ip else ""
+        table.add_row(
+            str(i),
+            ip_info.ip + current_marker,
+            ip_info.interface,
+            ip_type
+        )
+    
+    # Add manual entry option
+    table.add_row(str(len(ips) + 1), "[dim]Enter manually...[/]", "", "")
+    table.add_row("0", "[dim]Cancel[/]", "", "")
+    
+    console.print(table)
+    
+    # Show warning about secondary IPs
+    has_secondary = any(not ip.is_main for ip in ips)
+    if has_secondary:
+        console.print("[dim]Note: Secondary IPs will have auto source routing configured[/]")
+    
+    # Get choice
+    valid_choices = [str(i) for i in range(len(ips) + 2)]
+    choice = Prompt.ask("\n[bold cyan]Select IP[/]", default="1")
+    
+    try:
+        idx = int(choice)
+        if idx == 0:
+            return None
+        if 1 <= idx <= len(ips):
+            selected = ips[idx - 1]
+            if not selected.is_main:
+                console.print(f"[yellow]⚠ {selected.ip} is a secondary IP. Source routing will be configured automatically.[/]")
+            return selected.ip
+        if idx == len(ips) + 1:
+            # Manual entry
+            return prompt_valid_ip("[bold green]Local Server Public IP[/]", required=True)
+    except ValueError:
+        # Maybe they typed an IP directly
+        if is_valid_ip(choice):
+            return choice
+    
+    console.print("[red]Invalid selection[/]")
+    return None
 
 
 def prompt_encap_type() -> str:
@@ -169,10 +236,11 @@ def show_main_menu() -> str:
     menu_items = [
         ("1", "Install/Verify Prerequisites"),
         ("2", "Create Tunnel"),
-        ("3", "Delete Tunnel"),
-        ("4", "List Tunnels"),
-        ("5", "Port Forwards"),
-        ("6", "View Logs"),
+        ("3", "Edit Tunnel"),
+        ("4", "Delete Tunnel"),
+        ("5", "List Tunnels"),
+        ("6", "Port Forwards"),
+        ("7", "View Logs"),
         ("0", "Exit"),
     ]
     
@@ -361,19 +429,9 @@ def prompt_tunnel_config(config: TunnelConfig, side: str, manager: ConfigManager
         default_session_id = 20
         default_peer_session_id = 10
     
-    # Local IP (with validation and auto-detection)
-    detected_ip = get_local_ip()
-    if detected_ip:
-        console.print(f"[dim]Detected server IP: [green]{detected_ip}[/][/]")
-        default_local = config.local_ip or detected_ip
-    else:
-        default_local = config.local_ip or ""
-    
-    local_ip = prompt_valid_ip(
-        "[bold green]Local Server Public IP[/] (this server)",
-        default=default_local if default_local else None,
-        required=True
-    )
+    # Local IP (select from available IPs)
+    console.print("[bold green]Select Local Server IP:[/]")
+    local_ip = prompt_select_local_ip(current_ip=config.local_ip)
     if not local_ip:
         return False
     config.local_ip = local_ip

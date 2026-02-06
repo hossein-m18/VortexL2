@@ -18,6 +18,7 @@ from vortexl2 import __version__
 from vortexl2.config import TunnelConfig, ConfigManager, GlobalConfig
 from vortexl2.tunnel import TunnelManager
 from vortexl2.forward import get_forward_manager, get_forward_mode, set_forward_mode, ForwardManager
+from vortexl2.routing import setup_source_routing, cleanup_source_routing, is_secondary_ip
 from vortexl2 import ui
 
 
@@ -147,6 +148,17 @@ def handle_create_tunnel(manager: ConfigManager):
     ui.show_output(msg, "Tunnel Setup")
     
     if success:
+        # Setup source routing if using secondary IP
+        if is_secondary_ip(config.local_ip):
+            ui.show_info("Setting up source routing for secondary IP...")
+            routing_success, routing_msg = setup_source_routing(config.local_ip, name)
+            if routing_success:
+                ui.show_success("Source routing configured")
+                config._config["has_source_routing"] = True
+            else:
+                ui.show_warning(f"Source routing setup failed: {routing_msg}")
+                ui.show_warning("Tunnel may not work correctly with this IP")
+        
         # Only save config after successful tunnel creation
         config.save()
         ui.show_success(f"Tunnel '{name}' created and started successfully!")
@@ -192,6 +204,15 @@ def handle_delete_tunnel(manager: ConfigManager):
         ui.show_info("Stopping tunnel...")
         success, msg = tunnel.full_teardown()
         ui.show_output(msg, "Tunnel Teardown")
+        
+        # Cleanup source routing if configured
+        if config._config.get("has_source_routing") and config.local_ip:
+            ui.show_info("Cleaning up source routing...")
+            cleanup_success, cleanup_msg = cleanup_source_routing(config.local_ip, selected)
+            if cleanup_success:
+                ui.show_success("Source routing cleaned up")
+            else:
+                ui.show_warning(f"Source routing cleanup: {cleanup_msg}")
     
     # Delete config
     manager.delete_tunnel(selected)
@@ -203,6 +224,113 @@ def handle_list_tunnels(manager: ConfigManager):
     """Handle listing all tunnels."""
     ui.show_banner()
     ui.show_tunnel_list(manager)
+    ui.wait_for_enter()
+
+
+def handle_edit_tunnel(manager: ConfigManager):
+    """Handle editing tunnel IPs (local and remote)."""
+    ui.show_banner()
+    ui.show_tunnel_list(manager)
+    
+    tunnels = manager.list_tunnels()
+    if not tunnels:
+        ui.show_warning("No tunnels to edit")
+        ui.wait_for_enter()
+        return
+    
+    selected = ui.prompt_select_tunnel(manager)
+    if not selected:
+        return
+    
+    config = manager.get_tunnel(selected)
+    if not config:
+        ui.show_error("Tunnel not found")
+        ui.wait_for_enter()
+        return
+    
+    # Show current config
+    ui.console.print(f"\n[bold white]Current Configuration for '{selected}':[/]")
+    ui.console.print(f"  Local IP:  [green]{config.local_ip}[/]")
+    ui.console.print(f"  Remote IP: [cyan]{config.remote_ip}[/]")
+    
+    # Menu for what to edit
+    ui.console.print("\n[bold white]What to edit:[/]")
+    ui.console.print("  [bold cyan][1][/] Change Local IP")
+    ui.console.print("  [bold cyan][2][/] Change Remote IP")
+    ui.console.print("  [bold cyan][3][/] Change Both IPs")
+    ui.console.print("  [bold cyan][0][/] Cancel")
+    
+    from rich.prompt import Prompt
+    choice = Prompt.ask("\n[bold cyan]Select option[/]", default="0")
+    
+    if choice == "0":
+        return
+    
+    old_local_ip = config.local_ip
+    old_has_routing = config._config.get("has_source_routing", False)
+    
+    # Edit based on choice
+    if choice in ["1", "3"]:
+        ui.console.print("\n[bold green]Select New Local IP:[/]")
+        new_local = ui.prompt_select_local_ip(current_ip=config.local_ip)
+        if new_local:
+            config.local_ip = new_local
+        elif choice == "1":
+            return  # Cancelled
+    
+    if choice in ["2", "3"]:
+        new_remote = ui.prompt_valid_ip(
+            "\n[bold cyan]New Remote IP[/]",
+            default=config.remote_ip,
+            required=True
+        )
+        if new_remote:
+            config.remote_ip = new_remote
+        elif choice == "2":
+            return  # Cancelled
+    
+    # Confirm changes
+    ui.console.print(f"\n[bold white]New Configuration:[/]")
+    ui.console.print(f"  Local IP:  [green]{config.local_ip}[/]")
+    ui.console.print(f"  Remote IP: [cyan]{config.remote_ip}[/]")
+    
+    if not ui.confirm("\nApply changes and recreate tunnel?", default=True):
+        # Revert changes
+        config.local_ip = old_local_ip
+        return
+    
+    # Cleanup old routing if needed
+    if old_has_routing and old_local_ip:
+        ui.show_info("Cleaning up old source routing...")
+        cleanup_source_routing(old_local_ip, selected)
+    
+    # Recreate tunnel with new IPs
+    ui.show_info("Stopping tunnel...")
+    tunnel = TunnelManager(config)
+    tunnel.full_teardown()
+    
+    ui.show_info("Starting tunnel with new IPs...")
+    success, msg = tunnel.full_setup()
+    ui.show_output(msg, "Tunnel Restart")
+    
+    if success:
+        # Setup new source routing if using secondary IP
+        if is_secondary_ip(config.local_ip):
+            ui.show_info("Setting up source routing for secondary IP...")
+            routing_success, routing_msg = setup_source_routing(config.local_ip, selected)
+            if routing_success:
+                ui.show_success("Source routing configured")
+                config._config["has_source_routing"] = True
+            else:
+                ui.show_warning(f"Source routing setup failed: {routing_msg}")
+        else:
+            config._config["has_source_routing"] = False
+        
+        config.save()
+        ui.show_success(f"Tunnel '{selected}' updated successfully!")
+    else:
+        ui.show_error("Tunnel restart failed")
+    
     ui.wait_for_enter()
 
 
@@ -428,12 +556,14 @@ def main_menu():
             elif choice == "2":
                 handle_create_tunnel(manager)
             elif choice == "3":
-                handle_delete_tunnel(manager)
+                handle_edit_tunnel(manager)
             elif choice == "4":
-                handle_list_tunnels(manager)
+                handle_delete_tunnel(manager)
             elif choice == "5":
-                handle_forwards_menu(manager)
+                handle_list_tunnels(manager)
             elif choice == "6":
+                handle_forwards_menu(manager)
+            elif choice == "7":
                 handle_logs(manager)
             else:
                 ui.show_warning("Invalid option")
