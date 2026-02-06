@@ -13,16 +13,21 @@ from .haproxy_manager import HAProxyManager
 
 def get_forward_manager(config=None):
     """
-    Get HAProxy forward manager if mode is enabled.
+    Get forward manager based on current mode.
     
     Returns:
-        HAProxyManager if forward_mode is 'haproxy', None otherwise.
+        HAProxyManager if forward_mode is 'haproxy',
+        SocatManager if forward_mode is 'socat',
+        None otherwise.
     """
     global_config = GlobalConfig()
     mode = global_config.forward_mode
     
     if mode == "haproxy":
         return HAProxyManager(config)
+    elif mode == "socat":
+        from .socat_manager import SocatManager
+        return SocatManager(config)
     return None
 
 

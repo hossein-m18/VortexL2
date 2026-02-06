@@ -447,17 +447,33 @@ def handle_forwards_menu(manager: ConfigManager):
                 new_mode = "none"
             elif mode_choice == "2":
                 new_mode = "haproxy"
+            elif mode_choice == "3":
+                new_mode = "socat"
             
             if new_mode and new_mode != current_mode:
-                # Stop current forwarding before changing mode
-                if current_mode != "none":
-                    ui.show_info("Stopping current forwards...")
+                # Stop and cleanup current mode before switching
+                if current_mode == "haproxy":
+                    ui.show_info("Stopping HAProxy forwards...")
                     if forward:
                         import asyncio
                         try:
                             asyncio.run(forward.stop_all_forwards())
+                            ui.show_success("✓ HAProxy forwards stopped")
                         except Exception as e:
-                            ui.show_warning(f"Could not stop forwards gracefully: {e}")
+                            ui.show_warning(f"Could not stop HAProxy gracefully: {e}")
+                    subprocess.run("systemctl stop vortexl2-forward-daemon", shell=True)
+                
+                elif current_mode == "socat":
+                    ui.show_info("Stopping Socat forwards...")
+                    try:
+                        from vortexl2.socat_manager import stop_all_socat
+                        success, msg = stop_all_socat()
+                        if success:
+                            ui.show_success(f"✓ {msg}")
+                        else:
+                            ui.show_warning(msg)
+                    except Exception as e:
+                        ui.show_warning(f"Could not stop Socat gracefully: {e}")
                     subprocess.run("systemctl stop vortexl2-forward-daemon", shell=True)
                 
                 # Set new mode
