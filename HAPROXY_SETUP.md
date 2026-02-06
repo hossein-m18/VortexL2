@@ -4,23 +4,24 @@ VortexL2 v2.0 uses **HAProxy** for production-grade, high-performance port forwa
 
 ## Why HAProxy?
 
-| Feature | Python asyncio (v1.x) | HAProxy (v2.0) |
-|---------|----------------------|----------------|
-| Latency | ~5-10ms overhead | <1ms overhead |
-| Throughput | ~100 Mbps | **10+ Gbps** |
-| Connections | ~1,000 | **100,000+** |
-| CPU Usage | High | **Very Low** |
-| Stability | Moderate | **Production-grade** |
+| Feature     | Python asyncio (v1.x) | HAProxy (v2.0)       |
+| ----------- | --------------------- | -------------------- |
+| Latency     | ~5-10ms overhead      | <1ms overhead        |
+| Throughput  | ~100 Mbps             | **10+ Gbps**         |
+| Connections | ~1,000                | **100,000+**         |
+| CPU Usage   | High                  | **Very Low**         |
+| Stability   | Moderate              | **Production-grade** |
 
 ## Installation
 
 HAProxy is automatically installed by the VortexL2 installer:
 
 ```bash
-bash <(curl -Ls https://raw.githubusercontent.com/iliya-Developer/VortexL2/main/install.sh)
+bash <(curl -Ls https://raw.githubusercontent.com/hossein-m18/VortexL2/main/install.sh)
 ```
 
 Or manually:
+
 ```bash
 sudo apt-get update
 sudo apt-get install haproxy
@@ -59,11 +60,13 @@ cat /etc/haproxy/haproxy.cfg
 ### HAProxy fails to start
 
 1. **Check configuration validity:**
+
    ```bash
    sudo haproxy -c -f /etc/haproxy/haproxy.cfg
    ```
 
 2. **Check logs:**
+
    ```bash
    sudo journalctl -u haproxy -f
    ```
@@ -76,16 +79,19 @@ cat /etc/haproxy/haproxy.cfg
 ### Port forward not working
 
 1. **Verify HAProxy is running:**
+
    ```bash
    sudo systemctl status haproxy
    ```
 
 2. **Check if port is listening:**
+
    ```bash
    ss -tlnp | grep haproxy
    ```
 
 3. **Verify remote host is reachable:**
+
    ```bash
    ping <remote-forward-ip>
    ```
@@ -98,6 +104,7 @@ cat /etc/haproxy/haproxy.cfg
 ### Restore original config
 
 If needed, restore the original HAProxy configuration:
+
 ```bash
 sudo cp /etc/haproxy/haproxy.cfg.bak /etc/haproxy/haproxy.cfg
 sudo systemctl restart haproxy

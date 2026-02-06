@@ -3,7 +3,7 @@
 # VortexL2 Installer
 # L2TPv3 Tunnel Manager for Ubuntu/Debian
 #
-# Usage: curl -fsSL https://raw.githubusercontent.com/iliya-Developer/VortexL2/main/install.sh | sudo bash
+# Usage: curl -fsSL https://raw.githubusercontent.com/hossein-m18/VortexL2/main/install.sh | sudo bash
 #
 
 set -e
@@ -20,16 +20,16 @@ INSTALL_DIR="/opt/vortexl2"
 BIN_PATH="/usr/local/bin/vortexl2"
 SYSTEMD_DIR="/etc/systemd/system"
 CONFIG_DIR="/etc/vortexl2"
-REPO_URL="https://github.com/iliya-Developer/VortexL2.git"
+REPO_URL="https://github.com/hossein-m18/VortexL2.git"
 REPO_BRANCH="main"
 
 echo -e "${CYAN}"
 cat << 'EOF'
- __      __        _            _     ___  
- \ \    / /       | |          | |   |__ \ 
+ __      __        _            _     ___
+ \ \    / /       | |          | |   |__ \
   \ \  / /__  _ __| |_ _____  _| |      ) |
-   \ \/ / _ \| '__| __/ _ \ \/ / |     / / 
-    \  / (_) | |  | ||  __/>  <| |____/ /_ 
+   \ \/ / _ \| '__| __/ _ \ \/ / |     / /
+    \  / (_) | |  | ||  __/>  <| |____/ /_
      \/ \___/|_|   \__\___/_/\_\______|____|
 EOF
 echo -e "${NC}"
@@ -58,7 +58,7 @@ apt-get install -y -qq python3 python3-pip python3-venv git iproute2 haproxy
 KERNEL_VERSION=$(uname -r)
 echo -e "${YELLOW}[2/6] Installing kernel modules for ${KERNEL_VERSION}...${NC}"
 apt-get install -y -qq "linux-modules-extra-${KERNEL_VERSION}" 2>/dev/null || \
-    echo -e "${YELLOW}Warning: Could not install linux-modules-extra (may already be available)${NC}"
+echo -e "${YELLOW}Warning: Could not install linux-modules-extra (may already be available)${NC}"
 
 # Load L2TP modules
 echo -e "${YELLOW}[3/6] Loading L2TP kernel modules...${NC}"
@@ -87,13 +87,13 @@ if command -v git &> /dev/null; then
         echo -e "${YELLOW}Git clone failed, trying manual download...${NC}"
         mkdir -p "$INSTALL_DIR"
         # If git fails, try downloading as archive
-        curl -fsSL "https://github.com/iliya-Developer/VortexL2/archive/refs/heads/${REPO_BRANCH}.tar.gz" | \
-            tar -xz -C "$INSTALL_DIR" --strip-components=1
+        curl -fsSL "https://github.com/hossein-m18/VortexL2/archive/refs/heads/${REPO_BRANCH}.tar.gz" | \
+        tar -xz -C "$INSTALL_DIR" --strip-components=1
     }
 else
     mkdir -p "$INSTALL_DIR"
-    curl -fsSL "https://github.com/iliya-Developer/VortexL2/archive/refs/heads/${REPO_BRANCH}.tar.gz" | \
-        tar -xz -C "$INSTALL_DIR" --strip-components=1
+    curl -fsSL "https://github.com/hossein-m18/VortexL2/archive/refs/heads/${REPO_BRANCH}.tar.gz" | \
+    tar -xz -C "$INSTALL_DIR" --strip-components=1
 fi
 
 # Install Python dependencies

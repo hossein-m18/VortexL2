@@ -5,11 +5,11 @@
 A modular, production-quality CLI tool for managing multiple L2TPv3 tunnels with HAProxy-based port forwarding.
 
 ```
- __      __        _            _     ___  
- \ \    / /       | |          | |   |__ \ 
+ __      __        _            _     ___
+ \ \    / /       | |          | |   |__ \
   \ \  / /__  _ __| |_ _____  _| |      ) |
-   \ \/ / _ \| '__| __/ _ \ \/ / |     / / 
-    \  / (_) | |  | ||  __/>  <| |____/ /_ 
+   \ \/ / _ \| '__| __/ _ \ \/ / |     / /
+    \  / (_) | |  | ||  __/>  <| |____/ /_
      \/ \___/|_|   \__\___/_/\_\______|____|
                                     v2.0.0
 ```
@@ -26,7 +26,7 @@ A modular, production-quality CLI tool for managing multiple L2TPv3 tunnels with
 ## 📦 Quick Install
 
 ```bash
-bash <(curl -Ls https://raw.githubusercontent.com/iliya-Developer/VortexL2/main/install.sh)
+bash <(curl -Ls https://raw.githubusercontent.com/hossein-m18/VortexL2/main/install.sh)
 ```
 
 ## 🚀 First Run
@@ -40,6 +40,7 @@ sudo vortexl2
 ### 2. Create Tunnels
 
 Each tunnel needs:
+
 - **Tunnel Name**: A unique identifier (e.g., `tunnel1`)
 - **Local IP**: This server's public IP
 - **Remote IP**: The other server's public IP
@@ -48,13 +49,13 @@ Each tunnel needs:
 
 ### 3. Configure Both Sides
 
-| Parameter | IRAN Side | KHAREJ Side |
-|-----------|-----------|-------------|
-| Local IP | 1.2.3.4 | 5.6.7.8 |
-| Remote IP | 5.6.7.8 | 1.2.3.4 |
-| Interface IP | 10.30.30.1/30 | 10.30.30.2/30 |
-| Tunnel ID | 1000 | 2000 |
-| Peer Tunnel ID | 2000 | 1000 |
+| Parameter      | IRAN Side     | KHAREJ Side   |
+| -------------- | ------------- | ------------- |
+| Local IP       | 1.2.3.4       | 5.6.7.8       |
+| Remote IP      | 5.6.7.8       | 1.2.3.4       |
+| Interface IP   | 10.30.30.1/30 | 10.30.30.2/30 |
+| Tunnel ID      | 1000          | 2000          |
+| Peer Tunnel ID | 2000          | 1000          |
 
 ### 4. Enable Port Forwarding (IRAN side only)
 
@@ -66,17 +67,17 @@ Each tunnel needs:
 
 ## 📋 Commands
 
-| Command | Description |
-|---------|-------------|
-| `sudo vortexl2` | Open management panel |
-| `sudo vortexl2 apply` | Apply all tunnels |
-| `sudo vortexl2 --version` | Show version |
+| Command                   | Description           |
+| ------------------------- | --------------------- |
+| `sudo vortexl2`           | Open management panel |
+| `sudo vortexl2 apply`     | Apply all tunnels     |
+| `sudo vortexl2 --version` | Show version          |
 
 ## 🔧 Services
 
-| Service | Description |
-|---------|-------------|
-| `vortexl2-tunnel.service` | Creates L2TP tunnels on boot |
+| Service                           | Description                     |
+| --------------------------------- | ------------------------------- |
+| `vortexl2-tunnel.service`         | Creates L2TP tunnels on boot    |
 | `vortexl2-forward-daemon.service` | Manages HAProxy port forwarding |
 
 ```bash
@@ -91,11 +92,13 @@ journalctl -u vortexl2-forward-daemon -f
 ## 🔍 Troubleshooting
 
 ### Tunnel not working
+
 1. Ensure matching tunnel IDs (swapped peer values)
 2. Check firewall allows IP protocol 115
 3. Verify modules: `lsmod | grep l2tp`
 
 ### Port forward not working
+
 1. Check HAProxy mode is enabled (not `none`)
 2. Verify tunnel: `ping 10.30.30.2`
 3. Check daemon: `systemctl status vortexl2-forward-daemon`
@@ -104,7 +107,7 @@ journalctl -u vortexl2-forward-daemon -f
 
 ```yaml
 # /etc/vortexl2/config.yaml (global)
-forward_mode: haproxy  # or: none
+forward_mode: haproxy # or: none
 
 # /etc/vortexl2/tunnels/tunnel1.yaml
 name: tunnel1
