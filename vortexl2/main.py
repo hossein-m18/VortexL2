@@ -141,31 +141,34 @@ def handle_create_tunnel(manager: ConfigManager):
         ui.wait_for_enter()
         return
     
-    # Start tunnel
+    # Setup source routing + iptables BEFORE creating tunnel (critical for secondary IPs)
+    if is_secondary_ip(config.local_ip):
+        ui.show_info("Setting up secondary IP routing (before tunnel creation)...")
+        routing_success, routing_msg = setup_secondary_ip_tunnel(
+            config.local_ip, config.remote_ip, name
+        )
+        ui.show_output(routing_msg, "Secondary IP Setup")
+        if routing_success:
+            ui.show_success("Secondary IP routing configured")
+            config._config["has_source_routing"] = True
+        else:
+            ui.show_warning("Secondary IP routing setup failed")
+            ui.show_warning("Tunnel may not work correctly with this IP")
+    
+    # Now create tunnel
     ui.show_info("Starting tunnel...")
     tunnel = TunnelManager(config)
     success, msg = tunnel.full_setup()
     ui.show_output(msg, "Tunnel Setup")
     
     if success:
-        # Setup source routing + iptables NAT if using secondary IP
-        if is_secondary_ip(config.local_ip):
-            ui.show_info("Setting up secondary IP routing...")
-            routing_success, routing_msg = setup_secondary_ip_tunnel(
-                config.local_ip, config.remote_ip, name
-            )
-            ui.show_output(routing_msg, "Secondary IP Setup")
-            if routing_success:
-                ui.show_success("Secondary IP routing configured")
-                config._config["has_source_routing"] = True
-            else:
-                ui.show_warning("Secondary IP routing setup failed")
-                ui.show_warning("Tunnel may not work correctly with this IP")
-        
         # Only save config after successful tunnel creation
         config.save()
         ui.show_success(f"Tunnel '{name}' created and started successfully!")
     else:
+        # Cleanup routing if tunnel creation failed
+        if config._config.get("has_source_routing"):
+            cleanup_secondary_ip_tunnel(config.local_ip, config.remote_ip, name)
         ui.show_error("Tunnel creation failed. Config not saved.")
     
     ui.wait_for_enter()
