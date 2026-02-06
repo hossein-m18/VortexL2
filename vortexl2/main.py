@@ -634,19 +634,37 @@ def handle_full_cleanup(manager: ConfigManager):
             if line:
                 del_rule = line.replace('-A', '-D', 1)
                 subprocess.run(f"iptables -t nat {del_rule}", shell=True, capture_output=True)
-                output_lines.append(f"Deleted {chain} rule")
+                output_lines.append(f"Deleted {chain} L2TP rule")
     
-    # 6. Remove port forward rules (10.30.30.x)
-    result = subprocess.run("iptables -t nat -S PREROUTING 2>/dev/null | grep -E '10\\.30\\.30\\.'",
+    # 6. Remove ALL port forward iptables rules (DNAT with --to-destination)
+    ui.show_info("Removing port forward iptables rules...")
+    result = subprocess.run("iptables -t nat -S PREROUTING 2>/dev/null",
+                           shell=True, capture_output=True, text=True)
+    for line in result.stdout.strip().split('\n'):
+        if line and '--to-destination' in line:
+            del_rule = line.replace('-A', '-D', 1)
+            subprocess.run(f"iptables -t nat {del_rule}", shell=True, capture_output=True)
+            output_lines.append("Deleted port forward DNAT rule")
+    
+    # Also remove MASQUERADE rules for tunnel IPs
+    result = subprocess.run("iptables -t nat -S POSTROUTING 2>/dev/null | grep -E '10\\.30\\.30\\.'",
                            shell=True, capture_output=True, text=True)
     for line in result.stdout.strip().split('\n'):
         if line:
             del_rule = line.replace('-A', '-D', 1)
             subprocess.run(f"iptables -t nat {del_rule}", shell=True, capture_output=True)
-            output_lines.append("Deleted port forward rule")
+            output_lines.append("Deleted MASQUERADE rule")
     
-    # 7. Kill socat processes
-    subprocess.run("pkill -f 'socat.*10.30.30'", shell=True, capture_output=True)
+    # 7. Stop HAProxy
+    ui.show_info("Stopping HAProxy...")
+    subprocess.run("systemctl stop haproxy 2>/dev/null", shell=True, capture_output=True)
+    subprocess.run("systemctl stop vortexl2-forward-daemon 2>/dev/null", shell=True, capture_output=True)
+    output_lines.append("Stopped HAProxy services")
+    
+    # 8. Kill ALL socat processes (not just tunnel IPs)
+    ui.show_info("Killing socat processes...")
+    result = subprocess.run("pkill -9 -f 'socat.*TCP' 2>/dev/null", shell=True, capture_output=True)
+    subprocess.run("pkill -9 -f 'socat.*UDP' 2>/dev/null", shell=True, capture_output=True)
     output_lines.append("Killed socat processes")
     
     # 8. Delete config files
