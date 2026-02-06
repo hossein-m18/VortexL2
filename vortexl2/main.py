@@ -542,6 +542,112 @@ def handle_logs(manager: ConfigManager):
     ui.wait_for_enter()
 
 
+def handle_full_cleanup(manager: ConfigManager):
+    """Handle full cleanup of all VortexL2 configurations."""
+    ui.show_banner()
+    ui.console.print("[bold red]⚠ FULL CLEANUP ⚠[/]")
+    ui.console.print("\nThis will remove:")
+    ui.console.print("  • All L2TP tunnels")
+    ui.console.print("  • All port forwards")
+    ui.console.print("  • All iptables NAT rules (protocol 115)")
+    ui.console.print("  • All vortex routing rules")
+    ui.console.print("  • All config files")
+    
+    if not ui.confirm("\n[bold red]Are you SURE you want to remove everything?[/]", default=False):
+        ui.show_info("Cleanup cancelled")
+        ui.wait_for_enter()
+        return
+    
+    output_lines = []
+    
+    # 1. Remove all L2TP sessions and tunnels
+    ui.show_info("Removing L2TP tunnels...")
+    result = subprocess.run(
+        "ip l2tp show tunnel 2>/dev/null | grep -oP 'Tunnel \\K\\d+'",
+        shell=True, capture_output=True, text=True
+    )
+    for tunnel_id in result.stdout.strip().split('\n'):
+        if tunnel_id:
+            # Get sessions first
+            sess_result = subprocess.run(
+                f"ip l2tp show session 2>/dev/null | grep 'tunnel {tunnel_id}' | grep -oP 'Session \\K\\d+'",
+                shell=True, capture_output=True, text=True
+            )
+            for session_id in sess_result.stdout.strip().split('\n'):
+                if session_id:
+                    subprocess.run(f"ip l2tp del session tunnel_id {tunnel_id} session_id {session_id}",
+                                   shell=True, capture_output=True)
+                    output_lines.append(f"Deleted session {session_id} in tunnel {tunnel_id}")
+            subprocess.run(f"ip l2tp del tunnel tunnel_id {tunnel_id}", shell=True, capture_output=True)
+            output_lines.append(f"Deleted tunnel {tunnel_id}")
+    
+    # 2. Remove l2tpeth interfaces
+    ui.show_info("Removing interfaces...")
+    result = subprocess.run("ip link show | grep -oP 'l2tpeth\\d+'", shell=True, capture_output=True, text=True)
+    for iface in result.stdout.strip().split('\n'):
+        if iface:
+            subprocess.run(f"ip link del {iface}", shell=True, capture_output=True)
+            output_lines.append(f"Deleted interface {iface}")
+    
+    # 3. Remove vortex routing rules
+    ui.show_info("Removing routing rules...")
+    result = subprocess.run("ip rule list", shell=True, capture_output=True, text=True)
+    for line in result.stdout.split('\n'):
+        if 'vortex' in line.lower() or 'gw138' in line:
+            prio = line.split(':')[0].strip()
+            subprocess.run(f"ip rule del prio {prio}", shell=True, capture_output=True)
+            output_lines.append(f"Deleted routing rule priority {prio}")
+    
+    # 4. Flush vortex routing tables
+    ui.show_info("Flushing routing tables...")
+    result = subprocess.run("grep -E '^[0-9]+\\s+vortex' /etc/iproute2/rt_tables 2>/dev/null",
+                           shell=True, capture_output=True, text=True)
+    for line in result.stdout.strip().split('\n'):
+        if line:
+            table = line.split()[1] if len(line.split()) > 1 else None
+            if table:
+                subprocess.run(f"ip route flush table {table}", shell=True, capture_output=True)
+                output_lines.append(f"Flushed table {table}")
+    
+    # 5. Remove iptables NAT rules for L2TP (protocol 115)
+    ui.show_info("Removing iptables rules...")
+    for chain in ['POSTROUTING', 'PREROUTING']:
+        result = subprocess.run(f"iptables -t nat -S {chain} 2>/dev/null | grep -- '-p 115'",
+                               shell=True, capture_output=True, text=True)
+        for line in result.stdout.strip().split('\n'):
+            if line:
+                del_rule = line.replace('-A', '-D', 1)
+                subprocess.run(f"iptables -t nat {del_rule}", shell=True, capture_output=True)
+                output_lines.append(f"Deleted {chain} rule")
+    
+    # 6. Remove port forward rules (10.30.30.x)
+    result = subprocess.run("iptables -t nat -S PREROUTING 2>/dev/null | grep -E '10\\.30\\.30\\.'",
+                           shell=True, capture_output=True, text=True)
+    for line in result.stdout.strip().split('\n'):
+        if line:
+            del_rule = line.replace('-A', '-D', 1)
+            subprocess.run(f"iptables -t nat {del_rule}", shell=True, capture_output=True)
+            output_lines.append("Deleted port forward rule")
+    
+    # 7. Kill socat processes
+    subprocess.run("pkill -f 'socat.*10.30.30'", shell=True, capture_output=True)
+    output_lines.append("Killed socat processes")
+    
+    # 8. Delete config files
+    ui.show_info("Removing config files...")
+    tunnels = manager.list_tunnels()
+    for tunnel_name in tunnels:
+        manager.delete_tunnel(tunnel_name)
+        output_lines.append(f"Deleted config: {tunnel_name}")
+    
+    # Flush routing cache
+    subprocess.run("ip route flush cache", shell=True, capture_output=True)
+    
+    ui.show_output("\n".join(output_lines), "Cleanup Results")
+    ui.show_success("Full cleanup completed!")
+    ui.wait_for_enter()
+
+
 def main_menu():
     """Main interactive menu loop."""
     check_root()
@@ -577,6 +683,8 @@ def main_menu():
                 handle_forwards_menu(manager)
             elif choice == "7":
                 handle_logs(manager)
+            elif choice == "8":
+                handle_full_cleanup(manager)
             else:
                 ui.show_warning("Invalid option")
                 ui.wait_for_enter()

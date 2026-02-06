@@ -241,6 +241,7 @@ def show_main_menu() -> str:
         ("5", "List Tunnels"),
         ("6", "Port Forwards"),
         ("7", "View Logs"),
+        ("8", "Full Cleanup (Remove All)"),
         ("0", "Exit"),
     ]
     
