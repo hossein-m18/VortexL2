@@ -19,7 +19,7 @@ GLOBAL_CONFIG_FILE = CONFIG_DIR / "config.yaml"
 class GlobalConfig:
     """Global configuration for VortexL2 (forward mode, etc.)."""
     
-    VALID_FORWARD_MODES = ["none", "haproxy"]
+    VALID_FORWARD_MODES = ["none", "haproxy", "socat"]
     
     def __init__(self):
         self._config: Dict[str, Any] = {}

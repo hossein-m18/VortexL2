@@ -61,19 +61,21 @@ class ForwardDaemon:
                 logger.error(f"Error in forward daemon: {e}")
             return
         
-        # mode == "haproxy"
-        logger.info("Starting HAProxy-based port forwarding")
-        
-        # Ensure HAProxy service is running
-        result = subprocess.run(
-            "systemctl start haproxy",
-            shell=True,
-            capture_output=True,
-            text=True
-        )
-        if result.returncode != 0:
-            logger.warning(f"Could not start HAProxy: {result.stderr}")
-        
+        # Handle specific modes
+        if mode == "haproxy":
+            logger.info("Starting HAProxy-based port forwarding")
+            # Ensure HAProxy service is running
+            result = subprocess.run(
+                "systemctl start haproxy",
+                shell=True,
+                capture_output=True,
+                text=True
+            )
+            if result.returncode != 0:
+                logger.warning(f"Could not start HAProxy: {result.stderr}")
+        elif mode == "socat":
+            logger.info("Starting Socat-based port forwarding")
+            
         self.running = True
         
         # Get forward manager
@@ -84,7 +86,7 @@ class ForwardDaemon:
             return
         
         # Start all forwards
-        logger.info("Starting HAProxy forwards for all configured tunnels")
+        logger.info(f"Starting {mode} forwards for all configured tunnels")
         success, msg = await self.forward_manager.start_all_forwards()
         if not success:
             logger.error(f"Failed to start port forwards: {msg}")
@@ -106,7 +108,7 @@ class ForwardDaemon:
         self.running = False
         
         if self.forward_manager:
-            logger.info("Stopping HAProxy forwards")
+            logger.info("Stopping active forwards")
             await self.forward_manager.stop_all_forwards()
         
         logger.info("Forward Daemon stopped")

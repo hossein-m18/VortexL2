@@ -291,6 +291,7 @@ def show_forward_mode_menu(current_mode: str) -> str:
     modes = [
         ("1", "none", "Disabled - Port forwarding off"),
         ("2", "haproxy", "HAProxy - High performance port forwarding"),
+        ("3", "socat", "Socat - Simple port forwarding"),
         ("0", "", "Cancel"),
     ]
     
