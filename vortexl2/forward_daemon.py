@@ -52,6 +52,9 @@ class ForwardDaemon:
         
         if mode == "none":
             logger.info("Port forwarding is DISABLED. Use 'sudo vortexl2' to enable HAProxy mode.")
+            # Stop both HAProxy and any socat services
+            subprocess.run("systemctl stop haproxy", shell=True, capture_output=True)
+            subprocess.run("pkill -f 'socat.*TCP-LISTEN'", shell=True, capture_output=True)
             self.running = True
             # Just wait - don't start any forwarding
             try:
@@ -64,6 +67,8 @@ class ForwardDaemon:
         # Handle specific modes
         if mode == "haproxy":
             logger.info("Starting HAProxy-based port forwarding")
+            # Stop any socat processes first to free ports
+            subprocess.run("pkill -f 'socat.*TCP-LISTEN'", shell=True, capture_output=True)
             # Ensure HAProxy service is running
             result = subprocess.run(
                 "systemctl start haproxy",
@@ -75,6 +80,9 @@ class ForwardDaemon:
                 logger.warning(f"Could not start HAProxy: {result.stderr}")
         elif mode == "socat":
             logger.info("Starting Socat-based port forwarding")
+            # Stop HAProxy first to free ports
+            logger.info("Stopping HAProxy to free ports for Socat...")
+            subprocess.run("systemctl stop haproxy", shell=True, capture_output=True)
             
         self.running = True
         

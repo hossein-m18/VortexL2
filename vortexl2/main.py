@@ -461,7 +461,9 @@ def handle_forwards_menu(manager: ConfigManager):
                             ui.show_success("✓ HAProxy forwards stopped")
                         except Exception as e:
                             ui.show_warning(f"Could not stop HAProxy gracefully: {e}")
-                    subprocess.run("systemctl stop vortexl2-forward-daemon", shell=True)
+                    # Always stop HAProxy service when switching away from haproxy mode
+                    subprocess.run("systemctl stop haproxy", shell=True, capture_output=True)
+                    subprocess.run("systemctl stop vortexl2-forward-daemon", shell=True, capture_output=True)
                 
                 elif current_mode == "socat":
                     ui.show_info("Stopping Socat forwards...")
@@ -474,7 +476,7 @@ def handle_forwards_menu(manager: ConfigManager):
                             ui.show_warning(msg)
                     except Exception as e:
                         ui.show_warning(f"Could not stop Socat gracefully: {e}")
-                    subprocess.run("systemctl stop vortexl2-forward-daemon", shell=True)
+                    subprocess.run("systemctl stop vortexl2-forward-daemon", shell=True, capture_output=True)
                 
                 # Set new mode
                 set_forward_mode(new_mode)
@@ -485,6 +487,11 @@ def handle_forwards_menu(manager: ConfigManager):
                     if ui.Confirm.ask("Start port forwarding now?", default=True):
                         restart_forward_daemon()
                         ui.show_success("Forward daemon started.")
+                else:
+                    # Make sure everything is stopped when going to none
+                    subprocess.run("systemctl stop haproxy", shell=True, capture_output=True)
+                    subprocess.run("systemctl stop vortexl2-forward-daemon", shell=True, capture_output=True)
+                    ui.show_info("All port forwarding stopped.")
             ui.wait_for_enter()
         elif choice == "7":
             # Setup auto-restart cron

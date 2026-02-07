@@ -481,30 +481,49 @@ frontend stats_frontend
         if not self._write_config_file(config):
             return False, "Failed to write HAProxy configuration"
         
-        # Start/reload HAProxy
+        # Use systemctl to manage HAProxy consistently
         try:
-            # First, try to reload if already running
-            if Path("/var/run/haproxy.pid").exists():
+            # Check if HAProxy service is already active
+            check_result = subprocess.run(
+                ["systemctl", "is-active", "haproxy"],
+                capture_output=True,
+                timeout=5,
+                text=True
+            )
+            is_active = check_result.returncode == 0
+            
+            if is_active:
+                # HAProxy is running - reload or restart
                 logger.info("HAProxy already running, reloading configuration")
                 if not self._reload_haproxy():
-                    return False, "Failed to reload HAProxy"
+                    # Reload failed, try restart
+                    result = subprocess.run(
+                        ["systemctl", "restart", "haproxy"],
+                        capture_output=True,
+                        timeout=15,
+                        text=True
+                    )
+                    if result.returncode != 0:
+                        return False, f"Failed to restart HAProxy: {result.stderr}"
+                    logger.info("HAProxy restarted successfully")
             else:
-                logger.info("Starting HAProxy service")
-                # Start HAProxy with -D flag to daemonize
+                # HAProxy is not running - start it
+                logger.info("Starting HAProxy service via systemctl")
                 result = subprocess.run(
-                    ["haproxy", "-f", str(HAPROXY_CONFIG_FILE), "-p", "/var/run/haproxy.pid", "-D"],
+                    ["systemctl", "start", "haproxy"],
                     capture_output=True,
-                    timeout=10,
+                    timeout=15,
                     text=True
                 )
                 
                 if result.returncode != 0:
-                    stderr_msg = result.stderr if result.stderr else "Unknown error"
+                    stderr_msg = result.stderr.strip() if result.stderr else "Unknown error"
                     return False, f"Failed to start HAProxy: {stderr_msg}"
                 
                 logger.info("HAProxy started successfully")
             
             self.running = True
+            
             # Collect all forwarded ports from all tunnels
             all_ports = set()
             for tunnel in tunnels:
@@ -514,6 +533,8 @@ frontend stats_frontend
             logger.info(msg)
             return True, msg
             
+        except subprocess.TimeoutExpired:
+            return False, "Timeout starting/reloading HAProxy"
         except Exception as e:
             logger.error(f"Exception in start_all_forwards: {e}")
             return False, f"Error starting HAProxy: {e}"
