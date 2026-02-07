@@ -149,6 +149,26 @@ class TunnelManager:
         if self.check_tunnel_exists():
             return False, f"Tunnel {ids['tunnel_id']} already exists. Delete it first or use recreate."
         
+        # For IP encapsulation with secondary IP, use main IP for kernel binding
+        # (Linux kernel raw sockets don't properly bind to secondary IPs)
+        # The iptables SNAT/DNAT will handle the translation
+        kernel_local_ip = self.config.local_ip
+        using_main_for_secondary = False
+        
+        if self.config.encap_type == "ip":
+            try:
+                from .routing import is_secondary_ip, get_main_ip
+                if is_secondary_ip(self.config.local_ip):
+                    main_ip = get_main_ip()
+                    if main_ip:
+                        kernel_local_ip = main_ip
+                        using_main_for_secondary = True
+                        # Store this info for reference
+                        self.config._config["uses_main_ip_binding"] = True
+                        self.config._config["desired_local_ip"] = self.config.local_ip
+            except ImportError:
+                pass  # routing module not available, use configured IP
+        
         # Build command based on encapsulation type
         cmd_parts = [
             "ip l2tp add tunnel",
@@ -168,7 +188,7 @@ class TunnelManager:
         else:  # ip (default)
             cmd_parts.extend([
                 "encap ip",
-                f"local {self.config.local_ip}",
+                f"local {kernel_local_ip}",  # Use main IP for kernel binding
                 f"remote {self.config.remote_ip}",
             ])
         
@@ -178,7 +198,11 @@ class TunnelManager:
         if not result.success:
             return False, f"Failed to create tunnel: {result.stderr}"
         
-        return True, f"Tunnel {ids['tunnel_id']} created successfully ({self.config.encap_type.upper()} mode)"
+        extra_msg = ""
+        if using_main_for_secondary:
+            extra_msg = f" (kernel bound to {kernel_local_ip}, NAT will use {self.config.local_ip})"
+        
+        return True, f"Tunnel {ids['tunnel_id']} created successfully ({self.config.encap_type.upper()} mode){extra_msg}"
     
     def create_session(self) -> Tuple[bool, str]:
         """Create L2TP session in existing tunnel."""
