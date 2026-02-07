@@ -145,6 +145,24 @@ class TunnelManager:
             return False, "IPs not configured. Please configure tunnel first."
         
         ids = self.config.get_tunnel_ids()
+        bind_local_ip = self.config.local_ip
+        bind_note = ""
+        
+        # For IP encapsulation with secondary IPs, bind kernel tunnel socket to main IP.
+        # Secondary-IP exposure is handled by source-routing/NAT rules in routing.py.
+        if self.config.encap_type == "ip":
+            try:
+                from vortexl2.routing import get_main_ip, is_secondary_ip
+                if is_secondary_ip(self.config.local_ip):
+                    main_ip = get_main_ip()
+                    if main_ip:
+                        bind_local_ip = main_ip
+                        bind_note = (
+                            f" (kernel bind: {main_ip}, advertised local: {self.config.local_ip})"
+                        )
+            except Exception:
+                # Keep configured local IP if routing helpers are not available.
+                pass
         
         if self.check_tunnel_exists():
             return False, f"Tunnel {ids['tunnel_id']} already exists. Delete it first or use recreate."
@@ -168,7 +186,7 @@ class TunnelManager:
         else:  # ip (default)
             cmd_parts.extend([
                 "encap ip",
-                f"local {self.config.local_ip}",
+                f"local {bind_local_ip}",
                 f"remote {self.config.remote_ip}",
             ])
         
@@ -178,7 +196,10 @@ class TunnelManager:
         if not result.success:
             return False, f"Failed to create tunnel: {result.stderr}"
         
-        return True, f"Tunnel {ids['tunnel_id']} created successfully ({self.config.encap_type.upper()} mode)"
+        return True, (
+            f"Tunnel {ids['tunnel_id']} created successfully "
+            f"({self.config.encap_type.upper()} mode){bind_note}"
+        )
     
     def create_session(self) -> Tuple[bool, str]:
         """Create L2TP session in existing tunnel."""
