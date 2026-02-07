@@ -77,22 +77,6 @@ def cmd_apply():
         if not config.is_configured():
             print(f"VortexL2: Tunnel '{config.name}' not fully configured, skipping")
             continue
-
-        secondary_setup_done = False
-        if config.encap_type == "ip" and is_secondary_ip(config.local_ip):
-            routing_success, routing_msg = setup_secondary_ip_tunnel(
-                config.local_ip,
-                config.remote_ip,
-                config.name
-            )
-            print(f"Tunnel '{config.name}' secondary-IP setup:\n{routing_msg}")
-            if not routing_success:
-                errors += 1
-                continue
-            secondary_setup_done = True
-            if not config._config.get("has_source_routing", False):
-                config._config["has_source_routing"] = True
-                config.save()
         
         tunnel = TunnelManager(config)
         
@@ -102,8 +86,6 @@ def cmd_apply():
         
         if not success:
             errors += 1
-            if secondary_setup_done:
-                cleanup_secondary_ip_tunnel(config.local_ip, config.remote_ip, config.name)
             continue
     
     print("VortexL2: Tunnel setup complete. Port forwarding managed by forward-daemon service")
@@ -160,7 +142,7 @@ def handle_create_tunnel(manager: ConfigManager):
         return
     
     # Setup source routing + iptables BEFORE creating tunnel (critical for secondary IPs)
-    if config.encap_type == "ip" and is_secondary_ip(config.local_ip):
+    if is_secondary_ip(config.local_ip):
         ui.show_info("Setting up secondary IP routing (before tunnel creation)...")
         routing_success, routing_msg = setup_secondary_ip_tunnel(
             config.local_ip, config.remote_ip, name
@@ -294,7 +276,6 @@ def handle_edit_tunnel(manager: ConfigManager):
         return
     
     old_local_ip = config.local_ip
-    old_remote_ip = config.remote_ip
     old_has_routing = config._config.get("has_source_routing", False)
     
     # Edit based on choice
@@ -325,13 +306,12 @@ def handle_edit_tunnel(manager: ConfigManager):
     if not ui.confirm("\nApply changes and recreate tunnel?", default=True):
         # Revert changes
         config.local_ip = old_local_ip
-        config.remote_ip = old_remote_ip
         return
     
     # Cleanup old routing if needed
     if old_has_routing and old_local_ip:
         ui.show_info("Cleaning up old secondary IP routing...")
-        cleanup_secondary_ip_tunnel(old_local_ip, old_remote_ip, selected)
+        cleanup_secondary_ip_tunnel(old_local_ip, config.remote_ip, selected)
     
     # Recreate tunnel with new IPs
     ui.show_info("Stopping tunnel...")
@@ -344,7 +324,7 @@ def handle_edit_tunnel(manager: ConfigManager):
     
     if success:
         # Setup new source routing + iptables if using secondary IP
-        if config.encap_type == "ip" and is_secondary_ip(config.local_ip):
+        if is_secondary_ip(config.local_ip):
             ui.show_info("Setting up secondary IP routing...")
             routing_success, routing_msg = setup_secondary_ip_tunnel(
                 config.local_ip, config.remote_ip, selected
@@ -355,7 +335,6 @@ def handle_edit_tunnel(manager: ConfigManager):
                 config._config["has_source_routing"] = True
             else:
                 ui.show_warning("Secondary IP routing setup failed")
-                config._config["has_source_routing"] = False
         else:
             config._config["has_source_routing"] = False
         
